@@ -64,7 +64,9 @@ router.post('/login', async (req, res) => {
     //     secure: process.env.NODE_ENV === 'production',
     //     sameSite: 'strict'
     // });
-    res.cookie('token', token)
+    res.cookie('token', token,{
+        expires:new Date(Date.now() + 1000 * 60 * 60 * 24 * 7)
+    })
 
     res.status(200).json({
         message: 'Login successful',
@@ -84,8 +86,17 @@ router.get('./user', async (req, res) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
     } catch (error) {
-        
+
     }
+})
+
+router.get('/logout', (req, res) => {
+    res.clearCookie('token')
+    
+    res.status(200).json({
+        message: 'Logged out successfully'
+    });
+
 })
 
 module.exports = router;
