@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelWhisper</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>PixelWhisper</h1>
+
+        <div id="auth-section">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="showTab('login')">Login</button>
+                <button class="tab-btn" onclick="showTab('register')">Register</button>
+            </div>
+
+            <div id="login-form" class="auth-form">
+                <h2>Login</h2>
+                <input type="text" id="login-username" placeholder="Username" required>
+                <input type="password" id="login-password" placeholder="Password" required>
+                <button onclick="login()">Login</button>
+            </div>
+
+            <div id="register-form" class="auth-form" style="display: none;">
+                <h2>Register</h2>
+                <input type="text" id="reg-username" placeholder="Username" required>
+                <input type="password" id="reg-password" placeholder="Password" required>
+                <button onclick="register()">Register</button>
+            </div>
+        </div>
+
+        <div id="app-section" style="display: none;">
+            <div class="header">
+                <span id="user-display"></span>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </div>
+
+            <div class="generate-section">
+                <h2>Generate Caption</h2>
+                <div class="upload-area">
+                    <input type="file" id="image-upload" accept="image/*">
+                    <button onclick="generateCaption()">Generate</button>
+                </div>
+                <div id="loading" style="display: none;">Generating caption...</div>
+                <div id="latest-result" style="display: none;">
+                    <h3>New Caption:</h3>
+                    <p id="generated-caption"></p>
+                    <img id="preview-image" src="" alt="Preview">
+                </div>
+            </div>
+
+            <div class="history-section">
+                <h2>History</h2>
+                <button onclick="loadHistory()">Refresh History</button>
+                <div id="history-grid" class="grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.auth-form').forEach(form => form.style.display = 'none');
+
+            if (tab === 'login') {
+                document.getElementById('login-form').style.display = 'block';
+                document.querySelector('.tab-btn:first-child').classList.add('active');
+            } else {
+                document.getElementById('register-form').style.display = 'block';
+                document.querySelector('.tab-btn:last-child').classList.add('active');
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('reg-username').value;
+            const password = document.getElementById('reg-password').value;
+
+            try {
+                const res = await fetch(`${API_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert('Registration successful! Please login.');
+                    showTab('login');
+                } else {
+                    alert(data.message || 'Registration failed');
+                }
+            } catch (err) {
+                alert('Error connecting to server');
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const res = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    document.getElementById('auth-section').style.display = 'none';
+                    document.getElementById('app-section').style.display = 'block';
+                    document.getElementById('user-display').textContent = `Welcome, User`; // Ideally get name from response
+                    loadHistory();
+                } else {
+                    alert(data.message || 'Login failed');
+                }
+            } catch (err) {
+                alert('Error connecting to server');
+            }
+        }
+
+        function logout() {
+            document.cookie = 'token=; Max-Age=0; path=/;';
+            location.reload();
+        }
+
+        async function generateCaption() {
+            const input = document.getElementById('image-upload');
+            if (!input.files[0]) return alert('Please select an image');
+
+            const formData = new FormData();
+            formData.append('image', input.files[0]);
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('latest-result').style.display = 'none';
+
+            try {
+                const res = await fetch(`${API_URL}/posts`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    document.getElementById('generated-caption').textContent = data.post.caption;
+                    document.getElementById('preview-image').src = data.post.image; // Use the URL from response
+                    document.getElementById('latest-result').style.display = 'block';
+                    loadHistory(); // Refresh history
+                } else {
+                    alert(data.message || 'Generation failed');
+                }
+            } catch (err) {
+                alert('Error generating caption');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch(`${API_URL}/posts`);
+                const data = await res.json();
+
+                if (res.ok) {
+                    const grid = document.getElementById('history-grid');
+                    grid.innerHTML = '';
+
+                    // Assuming API returns { posts: [] }
+                    const posts = data.posts || [];
+
+                    // Simple reverse to show newest first if no timestamp sort on backend
+                    posts.reverse().forEach(post => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        card.innerHTML = `
+                            <img src="${post.image}" alt="Caption Image" loading="lazy">
+                            <p>${post.caption}</p>
+                        `;
+                        grid.appendChild(card);
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to load history', err);
+            }
+        }
+    </script>
+</body>
+
+</html>
